@@ -1,0 +1,13 @@
+<!DOCTYPE html>
+<html>
+<head><title>API Page</title></head>
+<body>
+  <script>
+    fetch("/api/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "a@b.com", password: "x" })
+    });
+  </script>
+</body>
+</html>

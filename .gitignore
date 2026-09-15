@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+.claude/
+*.pyc
+*.db
+.env
+.env.*
+*.log
+.pytest_cache/
+scan_result.json

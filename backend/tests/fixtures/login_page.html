@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+<head><title>Test Login Page</title></head>
+<body>
+  <form action="/login" method="POST">
+    <input type="text" name="username" id="username" placeholder="Username" required>
+    <input type="password" name="password" id="password" placeholder="Password" required>
+    <button type="submit">Login</button>
+  </form>
+
+  <form action="/search" method="GET">
+    <input type="search" name="query" placeholder="Search products">
+    <button type="submit">Search</button>
+  </form>
+
+  <a href="/product?id=42&ref=home">View product</a>
+</body>
+</html>
