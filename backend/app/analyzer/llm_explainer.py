@@ -216,23 +216,31 @@ def explain_owasp_finding(category: str, evidence: str, description: str, severi
     """Agentic RAG remediation for one OwaspFinding:
 
     1. Retrieve — pull the best-matching local KB chunk for the finding.
-    2. Reason — (if LLM_EXPLAINER_BACKEND=lmstudio) ask WhiteRabbitNeo
-       what additional concept it needs to sharpen the fix, given what
-       was already retrieved. This is the agentic step: the *model*
+    2. Reason — ask WhiteRabbitNeo (via LM Studio's local server) what
+       additional concept it needs to sharpen the fix, given what was
+       already retrieved. This is the agentic step: the *model*
        decides the follow-up query, it isn't hardcoded.
     3. Retrieve again — look up that model-chosen follow-up query
        against the same local KB.
     4. Generate — ask WhiteRabbitNeo for the final fix, grounded in
        both retrieved chunks plus the specific evidence.
 
-    Falls back to the raw retrieved chunk(s) at any step where the
-    local model isn't reachable, so this never returns an empty string
-    and never raises.
+    Unlike explain() (used for field-level risk explanations, which
+    stays opt-in behind LLM_EXPLAINER_BACKEND so the test suite never
+    depends on a model server being up), this OWASP remediation path
+    always attempts WhiteRabbitNeo first by default — that's the
+    actual point of Stage 5. It still fails soft: if LM Studio isn't
+    running or errors at any step, every call below returns None and
+    this falls back to the raw retrieved KB chunk(s), so it never
+    raises and never returns an empty string. Set
+    LLM_EXPLAINER_DISABLE_LOCAL_MODEL=1 to skip the model calls
+    entirely (e.g. for a fast offline test run) and use the KB text
+    directly.
     """
     first_chunks = retrieve(f"{category} {evidence} {description}", k=1)
     all_chunks = list(first_chunks)
 
-    use_lmstudio = os.environ.get("LLM_EXPLAINER_BACKEND") == "lmstudio"
+    use_lmstudio = os.environ.get("LLM_EXPLAINER_DISABLE_LOCAL_MODEL") != "1"
     if use_lmstudio and first_chunks:
         followup_query = _agentic_followup_query(category, evidence, first_chunks[0])
         if followup_query:
