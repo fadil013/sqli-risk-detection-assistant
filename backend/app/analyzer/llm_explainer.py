@@ -184,29 +184,72 @@ def explain(
 
 def _owasp_template_remediation(category: str, evidence: str, kb_chunks: list[str]) -> str:
     if kb_chunks:
-        return kb_chunks[0]
+        return " ".join(kb_chunks[:2])
     return f"Review and remediate: {evidence}"
 
 
-def explain_owasp_finding(category: str, evidence: str, description: str, severity: str) -> str:
-    """RAG-grounded remediation for one OwaspFinding: retrieves the
-    most relevant local knowledge-base chunk(s) for this finding, then
-    (if LLM_EXPLAINER_BACKEND=lmstudio) asks WhiteRabbitNeo to turn
-    that retrieved context + the specific evidence into a concrete,
-    on-topic fix. Falls back to the raw retrieved chunk if the local
-    model isn't reachable, so this never returns an empty string.
-    """
-    kb_chunks = retrieve(f"{category} {evidence} {description}", k=2)
-    template_text = _owasp_template_remediation(category, evidence, kb_chunks)
+_FOLLOWUP_SYSTEM_PROMPT = (
+    "You are WhiteRabbitNeo, a cybersecurity-expert AI planning a knowledge-base lookup. "
+    "You will be shown one finding and one already-retrieved reference chunk. Reply with "
+    "ONLY a short search phrase (3-6 words) naming the ONE additional security concept "
+    "that would most sharpen the fix for THIS specific finding — no punctuation, no "
+    "explanation, no preamble, just the phrase itself on a single line."
+)
 
-    if os.environ.get("LLM_EXPLAINER_BACKEND") == "lmstudio":
-        context = "\n\n".join(kb_chunks) if kb_chunks else "No specific reference material retrieved."
+
+def _agentic_followup_query(category: str, evidence: str, first_chunk: str) -> str | None:
+    """The 'agentic' step: instead of a fixed k=2 retrieval, the model
+    itself inspects what was already retrieved and names what's still
+    missing — so the second retrieval is driven by the model's own
+    assessment of the gap, not a hardcoded second query.
+    """
+    prompt = (
+        f"Finding category: {category}\n"
+        f"Evidence: {evidence}\n"
+        f"Already retrieved reference:\n{first_chunk}\n\n"
+        "What ONE additional concept should be looked up next?"
+    )
+    return _call_lmstudio(prompt, system_prompt=_FOLLOWUP_SYSTEM_PROMPT)
+
+
+def explain_owasp_finding(category: str, evidence: str, description: str, severity: str) -> str:
+    """Agentic RAG remediation for one OwaspFinding:
+
+    1. Retrieve — pull the best-matching local KB chunk for the finding.
+    2. Reason — (if LLM_EXPLAINER_BACKEND=lmstudio) ask WhiteRabbitNeo
+       what additional concept it needs to sharpen the fix, given what
+       was already retrieved. This is the agentic step: the *model*
+       decides the follow-up query, it isn't hardcoded.
+    3. Retrieve again — look up that model-chosen follow-up query
+       against the same local KB.
+    4. Generate — ask WhiteRabbitNeo for the final fix, grounded in
+       both retrieved chunks plus the specific evidence.
+
+    Falls back to the raw retrieved chunk(s) at any step where the
+    local model isn't reachable, so this never returns an empty string
+    and never raises.
+    """
+    first_chunks = retrieve(f"{category} {evidence} {description}", k=1)
+    all_chunks = list(first_chunks)
+
+    use_lmstudio = os.environ.get("LLM_EXPLAINER_BACKEND") == "lmstudio"
+    if use_lmstudio and first_chunks:
+        followup_query = _agentic_followup_query(category, evidence, first_chunks[0])
+        if followup_query:
+            second_chunks = retrieve(followup_query, k=1)
+            all_chunks.extend(c for c in second_chunks if c not in all_chunks)
+
+    template_text = _owasp_template_remediation(category, evidence, all_chunks)
+
+    if use_lmstudio:
+        context = "\n\n".join(all_chunks) if all_chunks else "No specific reference material retrieved."
         prompt = (
             f"OWASP category: {category}\n"
             f"Severity: {severity}\n"
             f"Evidence observed: {evidence}\n"
             f"Description: {description}\n\n"
-            f"Reference remediation guidance (retrieved from local knowledge base):\n{context}\n\n"
+            f"Reference remediation guidance (retrieved from local knowledge base, "
+            f"including a self-directed follow-up lookup):\n{context}\n\n"
             "Using the evidence and reference guidance above, write a short, specific, "
             "actionable fix (2-4 sentences) for this exact finding."
         )
