@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head><title>Search</title></head>
+<body>
+  <form action="/search" method="GET">
+    <input type="search" name="q" placeholder="Search products">
+    <button type="submit">Go</button>
+  </form>
+
+  <!-- Simulates a React-style search box added by JS after load,
+       not wrapped in a <form> at all. Should be picked up as a
+       "standalone" input by Feature 4. -->
+  <div id="app" data-reactroot></div>
+  <script>
+    setTimeout(function () {
+      var box = document.createElement("input");
+      box.id = "searchBox";
+      box.setAttribute("type", "text");
+      box.setAttribute("placeholder", "JS search box");
+      document.getElementById("app").appendChild(box);
+    }, 100);
+  </script>
+
+  <a href="index.html">Back home</a>
+</body>
+</html>
