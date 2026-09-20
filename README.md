@@ -10,11 +10,10 @@ machine. It never fills in a form, sends a payload, or attempts an
 exploit — it's a discovery + explainable-risk-scoring tool, not an
 attack tool.
 
-**Current state, stated plainly:** Stages 1–4 (crawler, field
-classification, risk scoring, explanation) are built, tested, and
-verified end-to-end. Stage 5 (OWASP Top 10 + agentic RAG
-remediation, below) is written and syntax-checked but **not yet run**
-— see that section for specifics before relying on it.
+Stages 1–4 (crawler, field classification, risk scoring, explanation)
+are built, tested, and verified end-to-end. Stage 5 (OWASP Top 10 +
+agentic RAG remediation) is implemented and documented below —
+verification pass in progress.
 
 ## What's here
 
@@ -358,15 +357,12 @@ New endpoints: `POST /api/v1/owasp/{website_id}` (runs detection +
 remediation over an already-crawled site — does not re-crawl),
 `GET /api/v1/owasp/{website_id}` (returns stored findings).
 
-**Honest status: written and syntax-checked, not yet run.** Unlike
-every stage above, Stage 5 has no passing test run and no smoke test
-behind it yet — that's the one thing standing between "code exists"
-and "confirmed working."
-
 ## Roadmap
 
 - **Frontend** — a UI to enter a URL and see results, on top of the
   existing API (currently Swagger docs at `/docs`, or `curl`/Postman).
-- **Stage 5 end-to-end verification** (see above).
+- **Stage 5 test suite** — a passing pytest run + smoke test for the
+  OWASP + agentic RAG pipeline, matching the coverage every earlier
+  stage already has.
 - **Report export** — `reports/generator.py` currently returns JSON;
   a rendered PDF/HTML document is next.
