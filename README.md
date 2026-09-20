@@ -363,10 +363,10 @@ every stage above, Stage 5 has no passing test run and no smoke test
 behind it yet — that's the one thing standing between "code exists"
 and "confirmed working."
 
-## Not yet built
+## Roadmap
 
-- **A frontend.** Everything is still API-only — Swagger docs
-  (`/docs`) or `curl`/Postman, no UI to enter a URL and see results.
+- **Frontend** — a UI to enter a URL and see results, on top of the
+  existing API (currently Swagger docs at `/docs`, or `curl`/Postman).
 - **Stage 5 end-to-end verification** (see above).
-- **PDF/HTML report export** — `reports/generator.py` returns JSON;
-  nothing renders a document yet.
+- **Report export** — `reports/generator.py` currently returns JSON;
+  a rendered PDF/HTML document is next.
