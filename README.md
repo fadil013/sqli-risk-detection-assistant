@@ -1,10 +1,20 @@
-# SQL Injection Risk Detection Assistant — Phase 1
+# SQLi Risk Detection Assistant
 
 Defensive security tool for **authorized** vulnerability assessment.
-This phase is a **discovery-only** web crawler: it loads a page you
-point it at and reports every input surface it finds. It does not
-fill in forms, does not send payloads, and does not attempt SQL
-injection. Risk scoring and AI classification come in later phases.
+Crawls a site (read-only, same-domain only, SSRF-guarded), classifies
+every input it finds, scores SQL injection risk 0–100, extends that
+into four more OWASP Top 10 categories, and generates a remediation
+for each finding via a local, uncensored LLM (WhiteRabbitNeo) using
+retrieval-augmented generation — no cloud API, nothing leaves the
+machine. It never fills in a form, sends a payload, or attempts an
+exploit — it's a discovery + explainable-risk-scoring tool, not an
+attack tool.
+
+**Current state, stated plainly:** Stages 1–4 (crawler, field
+classification, risk scoring, explanation) are built, tested, and
+verified end-to-end. Stage 5 (OWASP Top 10 + agentic RAG
+remediation, below) is written and syntax-checked but **not yet run**
+— see that section for specifics before relying on it.
 
 ## What's here
 
@@ -302,18 +312,61 @@ rows object-by-object instead of via a bulk query, which keeps the
 session in sync) — caught by treating a SQLAlchemy warning as a
 hard test failure rather than ignoring it.
 
-## What's intentionally NOT built yet
+## Stage 5 — OWASP Top 10 Detection + Agentic RAG Remediation
 
-Per the phased plan, still Phase 2+ and would be premature now:
+Expands risk scoring past SQL injection into four more OWASP Top 10
+(2021) categories, using data the crawler already collects — no new
+requests are made to the target. `app/analyzer/owasp_checks.py`:
 
-- Risk scoring / "Critical"/"High"/"Low" labels
-- Field classification (authentication vs. search vs. low-risk)
-- Source code static analysis
-- Report generation (PDF/HTML output)
+- **Cryptographic Failures** — target served over plain HTTP.
+- **Security Misconfiguration** — missing security response headers
+  (`Content-Security-Policy`, `X-Frame-Options`,
+  `Strict-Transport-Security`, `X-Content-Type-Options`).
+- **Broken Access Control** — an admin-classified page returning
+  content with no visible login/403/404 gate.
+- **Vulnerable Components** — every fingerprinted technology is
+  flagged for a manual version check. Said plainly rather than faked:
+  the fingerprinter doesn't extract version numbers today, so this
+  can point at what to check, not confirm a CVE match.
 
-## Next step (Phase 2)
+**Not auto-detected, on purpose:** Insecure Design, Software/Data
+Integrity Failures, and Security Logging & Monitoring Failures aren't
+observable passively from outside the app (no source, log, or session
+access), so no check pretends to cover them.
 
-Field classification: take each `InputFinding`/`ParameterFinding`
-this phase discovers and score its probability of touching a SQL
-query, using field `name`, `type`, and the page's `method` — this is
-where `sklearn` (or later, LLM reasoning) comes in.
+**Remediation is agentic RAG, not a canned lookup**
+(`app/analyzer/remediation_kb.py` + `llm_explainer.py`):
+1. Retrieve — pull the best-matching chunk from a small local
+   knowledge base (plain-Python TF-IDF, no scipy/sklearn dependency,
+   so it isn't at the mercy of a native-DLL toolchain).
+2. Reason — WhiteRabbitNeo (via LM Studio's local, OpenAI-compatible
+   server) is asked what additional concept it needs to sharpen the
+   fix, given what was already retrieved. The *model* decides the
+   follow-up query — it isn't hardcoded.
+3. Retrieve again — that model-chosen query is looked up against the
+   same local KB.
+4. Generate — WhiteRabbitNeo writes the final fix, grounded in both
+   retrieved chunks plus the specific finding.
+
+Connected by default (no env var needed) at `localhost:1234`, model
+`whiterabbitneo-v3-7b`. Fails soft to the raw retrieved KB text at any
+step if LM Studio isn't running, so this never raises and never
+returns an empty string. Set `LLM_EXPLAINER_DISABLE_LOCAL_MODEL=1` to
+skip the model calls entirely (fast/offline runs).
+
+New endpoints: `POST /api/v1/owasp/{website_id}` (runs detection +
+remediation over an already-crawled site — does not re-crawl),
+`GET /api/v1/owasp/{website_id}` (returns stored findings).
+
+**Honest status: written and syntax-checked, not yet run.** Unlike
+every stage above, Stage 5 has no passing test run and no smoke test
+behind it yet — that's the one thing standing between "code exists"
+and "confirmed working."
+
+## Not yet built
+
+- **A frontend.** Everything is still API-only — Swagger docs
+  (`/docs`) or `curl`/Postman, no UI to enter a URL and see results.
+- **Stage 5 end-to-end verification** (see above).
+- **PDF/HTML report export** — `reports/generator.py` returns JSON;
+  nothing renders a document yet.
